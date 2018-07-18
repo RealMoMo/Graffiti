@@ -2,11 +2,10 @@ package cn.hzw.graffiti;
 
 
 import android.app.Activity;
-import android.content.Context;
-import android.graphics.Bitmap;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.view.View;
+
+import cn.hzw.graffiti.core.IGraffiti;
 
 /**
  * 涂鸦参数
@@ -25,17 +24,6 @@ public class GraffitiParams implements Parcelable {
      * 　保存路径是否为目录，如果为目录，则在该目录生成由时间戳组成的图片名称
      */
     public boolean mSavePathIsDir;
-    /**
-     * 　橡皮擦底图，如果为null，则底图为当前图片路径
-     * {@link GraffitiView#GraffitiView(Context, Bitmap, String, boolean, GraffitiListener)}
-     */
-    public String mEraserPath;
-
-    /**
-     * 橡皮擦底图是否调整大小，如果为true则调整到跟当前涂鸦图片一样的大小．
-     * 默认为true
-     */
-    public boolean mEraserImageIsResizeable = true;
 
     /**
      * 触摸时，图片区域外是否绘制涂鸦轨迹
@@ -45,9 +33,9 @@ public class GraffitiParams implements Parcelable {
     /**
      * 涂鸦时（手指按下）隐藏设置面板的延长时间(ms)，当小于等于0时则为不尝试隐藏面板（即保持面板当前状态不变）;当大于0时表示需要触摸屏幕超过一定时间后才隐藏
      * 或者手指抬起时展示面板的延长时间(ms)，或者表示需要离开屏幕超过一定时间后才展示
-     * 默认为800ms
+     * 默认为250ms
      */
-    public long mChangePanelVisibilityDelay = 800; //ms
+    public long mChangePanelVisibilityDelay = 250; //ms
 
     /**
      * 设置放大镜的倍数，当小于等于0时表示不使用放大器功能
@@ -63,9 +51,21 @@ public class GraffitiParams implements Parcelable {
     public boolean mIsFullScreen = false;
 
     /**
-     * 初始化的画笔大小
+     * 初始化的画笔大小,单位为像素
      */
-    public float mPaintSize = -1;
+    public float mPaintPixelSize = -1;
+
+    /**
+     * 初始化的画笔大小,单位为涂鸦坐标系中的单位大小，该单位参考dp，独立于图片
+     * mPaintUnitSize值优先于mPaintPixelSize
+     */
+    public float mPaintUnitSize = -1;
+
+    /**
+     * 画布的最小/最大缩放倍数
+     */
+    public float mMinScale = GraffitiView.MIN_SCALE;
+    public float mMaxScale = GraffitiView.MAX_SCALE;
 
     public static final Creator<GraffitiParams> CREATOR = new Creator<GraffitiParams>() {
         @Override
@@ -74,13 +74,14 @@ public class GraffitiParams implements Parcelable {
             params.mImagePath = in.readString();
             params.mSavePath = in.readString();
             params.mSavePathIsDir = in.readInt() == 1;
-            params.mEraserPath = in.readString();
-            params.mEraserImageIsResizeable = in.readInt() == 1;
             params.mIsDrawableOutside = in.readInt() == 1;
             params.mChangePanelVisibilityDelay = in.readLong();
             params.mAmplifierScale = in.readFloat();
             params.mIsFullScreen = in.readInt() == 1;
-            params.mPaintSize = in.readFloat();
+            params.mPaintPixelSize = in.readFloat();
+            params.mPaintUnitSize = in.readFloat();
+            params.mMinScale = in.readFloat();
+            params.mMaxScale = in.readFloat();
 
             return params;
         }
@@ -96,13 +97,14 @@ public class GraffitiParams implements Parcelable {
         dest.writeString(mImagePath);
         dest.writeString(mSavePath);
         dest.writeInt(mSavePathIsDir ? 1 : 0);
-        dest.writeString(mEraserPath);
-        dest.writeInt(mEraserImageIsResizeable ? 1 : 0);
         dest.writeInt(mIsDrawableOutside ? 1 : 0);
         dest.writeLong(mChangePanelVisibilityDelay);
         dest.writeFloat(mAmplifierScale);
         dest.writeInt(mIsFullScreen ? 1 : 0);
-        dest.writeFloat(mPaintSize);
+        dest.writeFloat(mPaintPixelSize);
+        dest.writeFloat(mPaintUnitSize);
+        dest.writeFloat(mMinScale);
+        dest.writeFloat(mMaxScale);
     }
 
     @Override
@@ -131,10 +133,10 @@ public class GraffitiParams implements Parcelable {
     public interface DialogInterceptor {
         /**
          * @param activity
-         * @param graffitiView
+         * @param graffiti
          * @param dialogType   对话框类型
          * @return 返回true表示拦截
          */
-        boolean onShow(Activity activity, GraffitiView graffitiView, DialogType dialogType);
+        boolean onShow(Activity activity, IGraffiti graffiti, DialogType dialogType);
     }
 }

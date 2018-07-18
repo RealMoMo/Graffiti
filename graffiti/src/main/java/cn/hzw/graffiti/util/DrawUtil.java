@@ -1,8 +1,14 @@
-package cn.hzw.graffiti;
+package cn.hzw.graffiti.util;
 
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PointF;
+import android.graphics.Rect;
+import android.view.View;
+import android.view.ViewTreeObserver;
+import android.view.Window;
+import android.widget.FrameLayout;
 
 import cn.forward.androids.utils.LogUtil;
 
@@ -12,7 +18,7 @@ import cn.forward.androids.utils.LogUtil;
 public class DrawUtil {
 
     // 涂鸦系统中的单位，根据图片居中时缩放倍数决定。一单位在视觉上的尺寸相同
-    public static float GRAFFITI_PIXEL_UNIT = 1;
+//    public static float GRAFFITI_PIXEL_UNIT = 1;
 
     public static void drawArrow(Canvas canvas, float sx, float sy, float ex,
                                  float ey, Paint paint) {
@@ -54,7 +60,7 @@ public class DrawUtil {
         canvas.drawPath(triangle, paint);
     }
 
-    // 计算 向量（px,py�? 旋转ang角度后的新长�?
+    // 计算 向量（px,py) 旋转ang角度后的新长度
     public static double[] rotateVec(float px, float py, double ang,
                                      boolean isChLen, double newLen) {
         double mathstr[] = new double[2];
@@ -138,75 +144,72 @@ public class DrawUtil {
         return angle;
     }
 
-    // xy为在涂鸦中旋转后的坐标，该函数逆向计算出未旋转前的坐标
-    public static float[] restoreRotatePointInGraffiti(int nowDegree, int oldDegree, float x, float y, float mOriginalPivotX, float mOriginalPivotY) {
-        int degree = nowDegree - oldDegree;
-        if (degree != 0) {
-            float px = mOriginalPivotX, py = mOriginalPivotY;
-            if (oldDegree == 90 || oldDegree == 270) { //　交换中心点的xy坐标
-                float t = px;
-                px = py;
-                py = t;
-            }
-            if (Math.abs(degree) == 90 || Math.abs(degree) == 270) {
-                x -= (py - px);
-                y -= -(py - px);
-            }
-
-            float[] coords = rotatePoint(-degree, x,
-                    y, px, py);
-
+    // 顺时针旋转
+    public static PointF rotatePoint(PointF coords, int degree, float x, float y, float px, float py) {
+        if (degree % 360 == 0) {
+            coords.x = x;
+            coords.y = y;
             return coords;
         }
-        return new float[]{x, y};
-    }
-
-    // 顺时针旋转
-    public static float[] rotatePoint(int degree, float x, float y, float px, float py) {
-        float[] coords = new float[2];
         /*角度变成弧度*/
         float radian = (float) (degree * Math.PI / 180);
-        coords[0] = (float) ((x - px) * Math.cos(radian) - (y - py) * Math.sin(radian) + px);
-        coords[1] = (float) ((x - px) * Math.sin(radian) + (y - py) * Math.cos(radian) + py);
+        coords.x = (float) ((x - px) * Math.cos(radian) - (y - py) * Math.sin(radian) + px);
+        coords.y = (float) ((x - px) * Math.sin(radian) + (y - py) * Math.cos(radian) + py);
 
         return coords;
     }
 
-    public static float[] rotatePointInGraffiti(int nowDegree, int oldDegree, float x, float y, float mOriginalPivotX, float mOriginalPivotY) {
-        int degree = nowDegree - oldDegree;
-        if (degree != 0) {
-            float px = mOriginalPivotX, py = mOriginalPivotY;
-            if (oldDegree == 90 || oldDegree == 270) { //　交换中心点的xy坐标
-                float t = px;
-                px = py;
-                py = t;
-            }
+    public static void main(String[] args) {
+        /*PointF pointF = new PointF(0,0);
+        restoreRotatePointInGraffiti(pointF,90,0,0,0,100,100);
+        System.out.printf(pointF.toString());*/
+    }
 
-            float[] coords = rotatePoint(degree, x,
-                    y, px, py); // 绕（px,py）旋转
-            if (Math.abs(degree) == 90 || Math.abs(degree) == 270) { // 偏移
-                coords[0] += (py - px);
-                coords[1] += -(py - px);
-            }
-            return coords;
+    public static void assistActivity(Window activity) {
+        new AndroidBug5497Workaround(activity);
+    }
+
+    public static class AndroidBug5497Workaround {
+
+        // For more information, see https://issuetracker.google.com/issues/36911528
+        // To use this class, simply invoke assistActivity() on an Activity that already has its content view set.
+
+        private View mChildOfContent;
+        private int usableHeightPrevious;
+        private FrameLayout.LayoutParams frameLayoutParams;
+
+        private AndroidBug5497Workaround(Window window) {
+            FrameLayout content = (FrameLayout) window.findViewById(android.R.id.content);
+            mChildOfContent = content.getChildAt(0);
+            mChildOfContent.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                public void onGlobalLayout() {
+                    possiblyResizeChildOfContent();
+                }
+            });
+            frameLayoutParams = (FrameLayout.LayoutParams) mChildOfContent.getLayoutParams();
         }
-        return new float[]{x, y};
-    }
 
-    /**
-     * 1dp在图片在适应屏幕时的像素点数
-     *
-     * @return 根据此值可以获取相对于当前图片的像素单位，比如文字的大小默认为30*getPixelUnit()，那么在所有涂鸦图片上的默认大小在视觉上看到的大小都一样。
-     */
-    public static float getGraffitiPixelUnit() {
-        return GRAFFITI_PIXEL_UNIT;
-    }
+        private void possiblyResizeChildOfContent() {
+            int usableHeightNow = computeUsableHeight();
+            if (usableHeightNow != usableHeightPrevious) {
+                int usableHeightSansKeyboard = mChildOfContent.getRootView().getHeight();
+                int heightDifference = usableHeightSansKeyboard - usableHeightNow;
+                if (heightDifference > (usableHeightSansKeyboard / 4)) {
+                    // keyboard probably just became visible
+                    frameLayoutParams.height = usableHeightSansKeyboard - heightDifference;
+                } else {
+                    // keyboard probably just became hidden
+                    frameLayoutParams.height = usableHeightSansKeyboard;
+                }
+                mChildOfContent.requestLayout();
+                usableHeightPrevious = usableHeightNow;
+            }
+        }
 
-    public static void setGraffitiPixelUnit(float graffitiPixelUnit) {
-        DrawUtil.GRAFFITI_PIXEL_UNIT = graffitiPixelUnit;
-    }
-
-    public static void main(String[] args){
-
+        private int computeUsableHeight() {
+            Rect r = new Rect();
+            mChildOfContent.getWindowVisibleDisplayFrame(r);
+            return r.bottom;
+        }
     }
 }
